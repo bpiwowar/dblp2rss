@@ -1,0 +1,30 @@
+#!/bin/sh
+
+id="$1"
+name="$2"
+cache="$3"
+
+test -d "$cache" || exit 1
+
+curlit() {
+	in-dcs && curl --proxy wwwcache.dcs.gla.ac.uk:8080 "$@" || curl --proxy "" "$@"
+}
+
+prefix="http://dblp.uni-trier.de/rec/bibtex"
+
+echo "<dblp-content name=\"$1\">"
+curlit "http://www.informatik.uni-trier.de/~ley/db/$id/index.html" 2> /dev/null | tidy -n -asxml 2> /dev/null | xml sel -N html=http://www.w3.org/1999/xhtml -t  -m '//html:a' -v '@href' -n | grep "^$name" | while read path; do 
+    # Should cache here
+    cachefile="$cache/$id/$path"
+
+    if ! test -f "$cachefile"; then
+	mkdir -p "$(dirname $cachefile)"
+	curlit "http://www.informatik.uni-trier.de/~ley/db/$id/$path" 2> /dev/null | tidy -n -asxml 2> /dev/null >  $cachefile
+	echo "Got $cachefile"
+	
+    fi
+    cat "$cachefile" | xml sel -N html=http://www.w3.org/1999/xhtml -t  -m '//html:a' -v '@href' -n | egrep '^'"$prefix"'.*\.xml$' | sed -e 's#^'"$prefix"/'#<dblpkey>#' -e 's/\.xml$/<\/dblpkey>/'
+
+done 
+
+echo "</dblp-content>"
